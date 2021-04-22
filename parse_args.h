@@ -5,11 +5,12 @@
  * @date 22.4.2021
  */
 
+
+#ifndef PARSE_ARGS_H
+#define PARSE_ARGS_H
+
 #include <stdio.h>
 #include <string.h>
-
-#ifndef __PARSE__ARGS_H__
-#define __PARSE__ARGS_H__
 
 /**
  * @struct args_t

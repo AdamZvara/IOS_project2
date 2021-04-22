@@ -1,3 +1,6 @@
 *.sw[op]
 proj2
 *.o
+test
+proj2.out
+.p2test.py
