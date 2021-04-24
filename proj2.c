@@ -8,61 +8,42 @@
 #include "proj2.h"
 
 //---------------SEMAPHORE FUNCTIONS-------------------
-/**
- * @brief Function for initializing semaphores in structure
- *
- * @param sem Pointer to semaphore structure
- *
- * @return 0 If semaphores are created
- */
+
 int init_semaphores(semaphores_t *sem)
 {
-    //TODO spravit ak sa nepodari malokovat semafor
+    //TODO spravit ak sa nepodari alokovat semafor
     sem->mutex = sem_open("/mutex", O_CREAT, 0644, 1);
     //sem->santa_sem = sem_open("/santa_sem", O_CREAT, 0644, 0);
     return 0;
 }
 
-/**
- * @brief Function for cleaning the semaphores
- *
- * @param sem Pointer to semaphore structure
- */
 void delete_semaphores(semaphores_t *sem)
 {
-    //semaphore for shared variables
     sem_close(sem->mutex);
     sem_unlink("/mutex");
 }
 
 //-------------- SHARED VARIABLE FUNCTIONS ------------------
-/**
- * @brief Function for initializing shared memory variables
- *
- * @param sh_vares Shared variables structure
- *
- * @return 0 If everything was successful
- */
-int initialize_variables(shared_t *sh_vars)
+
+int create_shared(const char *name, u_int **var)
 {
-    int fd = shm_open("/process_count", O_RDWR|O_CREAT|O_TRUNC, 0644);
+    //TODO fix if var was not created
+    int fd = shm_open(name, O_RDWR|O_CREAT|O_TRUNC, 0644);
     ftruncate(fd, 4);
-    sh_vars->pcount = (u_int *)mmap(NULL, 4, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    *var = (u_int *)mmap(NULL, 4, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 
-    fd = shm_open("/elves_count", O_RDWR|O_CREAT|O_TRUNC, 0644);
-    ftruncate(fd, 4);
-    sh_vars->elves = (u_int *)mmap(NULL, 4, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-
-    fd = shm_open("/reindeer_count", O_RDWR|O_CREAT|O_TRUNC, 0644);
-    ftruncate(fd, 4);
-    sh_vars->reindeers = (u_int *)mmap(NULL, 4, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-    
     return 0;
 }
 
-/**
- * @brief Function to clear shared variables
- */
+int initialize_shared(shared_t *sh_vars)
+{
+    create_shared("/process_count", &(sh_vars->pcount));
+    create_shared("/elves_count",&(sh_vars->elves));
+    create_shared("/reindeer_count", &(sh_vars->reindeers));
+
+    return 0;
+}
+
 void delete_shared()
 {
     shm_unlink("/process_count");
@@ -71,14 +52,7 @@ void delete_shared()
 }
 
 //---------------- OTHER FUNCTIONS --------------------
-/**
- * @brief Function to generate random number from min to max
- *
- * @param min Lower bound of the interval
- * @param max Upper bound of the interval
- *
- * @return Random number within the interval
- */
+
 int random_number(int min, int max)
 {
     int number = rand() % (max-min+1);
@@ -92,7 +66,7 @@ void santa_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars)
     sem_wait(sem->mutex);
         u_int *count = sh_vars->pcount;
         (*count)++;
-        fprintf(fr, "%d: Hello i am santa\n", *count);
+        fprintf(fr, "%d: Santa going to sleep\n", *count);
         fflush(fr);
     sem_post(sem->mutex);
 }
@@ -104,14 +78,9 @@ void elf_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, int my_id, int
 
     sem_wait(sem->mutex);
         u_int *count = sh_vars->pcount;
-        u_int *elf_count = sh_vars->elves;
-
         (*count)++;
-        fprintf(fr, "%d: Elf %d: \n", *count, my_id);
+        fprintf(fr, "%d: Elf %d: started\n", *count, my_id);
         fflush(fr);
-
-        (*elf_count)++;
-
     sem_post(sem->mutex);
 }
 
@@ -152,7 +121,7 @@ int main(int argc, char *argv[])
     if (init_semaphores(&sem)) return 1;
     
     shared_t sh_vars;
-    if (initialize_variables(&sh_vars))
+    if (initialize_shared(&sh_vars))
     {
         delete_semaphores(&sem);
         fclose(fr);

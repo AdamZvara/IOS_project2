@@ -48,7 +48,6 @@ typedef struct semaphores
     sem_t *santa_sem;
 } semaphores_t;
 
-//TODO is this necessary?
 typedef struct shared
 {
     u_int *pcount;
@@ -61,8 +60,8 @@ typedef struct shared
  * 
  * @param Pointer to semaphores_t structure
  *
- * @return 0 On success
- * @return 1 If any error occured
+ * @return 0 on success
+ * @return 1 ff any error occured
  */
 int init_semaphores(semaphores_t *sem);
 
@@ -72,5 +71,42 @@ int init_semaphores(semaphores_t *sem);
  * @param Pointer to semaphores_t structure
  */
 void delete_semaphores(semaphores_t *sem);
+
+
+/**
+ * @brief Create a single shared variable
+ *
+ * @param name Name of the shared variable
+ * @param var Pointer to pointe to item in shared_t structure
+ *
+ * @return 0 on succcess
+ * @return 1 if any error occured
+ */
+int create_shared(const char *name, u_int **var);
+
+/**
+ * @brief Initialize shared variables between processes
+ *
+ * @param sh_vars Pointer to shared variable structure
+ *
+ * @return 0 on succcess
+ * @return 1 if any error occured
+ */
+int initialize_shared(shared_t *sh_vars);
+
+/**
+ * @brief Function to clear shared variables
+ */
+void delete_shared();
+
+/**
+ * @brief Function to generate random number from min to max
+ *
+ * @param min Lower bound of the interval
+ * @param max Upper bound of the interval
+ *
+ * @return Random number within the interval
+ */
+int random_number(int min, int max);
 
 #endif
