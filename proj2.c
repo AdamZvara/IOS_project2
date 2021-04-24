@@ -22,6 +22,7 @@ int init_semaphores(semaphores_t *sem)
     sem->elf_barrier = sem_open("/elf_barrier", O_CREAT, 0644, 0);
     sem->reindeer_mutex = sem_open("/reindeer_mutex", O_CREAT, 0644, 0);
     sem->all_hitched = sem_open("/all_hitched", O_CREAT, 0644, 0);
+    sem->santa_test = sem_open("/santa_test", O_CREAT, 0644, 0);
     
     return 0;
 }
@@ -35,6 +36,7 @@ void delete_semaphores(semaphores_t *sem)
     sem_close(sem->elf_barrier);
     sem_close(sem->reindeer_mutex);
     sem_close(sem->all_hitched);
+    sem_close(sem->santa_test);
 
     sem_unlink("/p_num_mutex");
     sem_unlink("/santa");
@@ -43,6 +45,7 @@ void delete_semaphores(semaphores_t *sem)
     sem_unlink("/elf_barrier");
     sem_unlink("/reindeer_mutex");
     sem_unlink("/all_hitched");
+    sem_unlink("/santa_test");
 }
 
 //-------------- SHARED VARIABLE FUNCTIONS ------------------
@@ -132,9 +135,13 @@ void santa_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, args_t args)
                 sem_post(sem->elf_barrier);
                 sem_post(sem->elf_barrier);
                 sem_post(sem->elf_barrier);
+                
+                sem_post(sem->count_mutex);
+                
+                sem_wait(sem->santa_test);
+                print_msg(fr, MUTEX, sh_vars, "Santa: going to sleep\n");
+
             }
-        sem_post(sem->count_mutex);
-        print_msg(fr, MUTEX, sh_vars, "Santa: going to sleep\n");
     }
 
     sem_wait(sem->all_hitched);
@@ -145,7 +152,8 @@ void santa_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, args_t args)
 void elf_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, int my_id, int max_time)
 {
     print_msg(fr, MUTEX, sh_vars, "Elf %d: started\n", my_id);
-    
+    bool need_help = false;
+
     while (1)
     {
         //simulate work
@@ -163,6 +171,7 @@ void elf_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, int my_id, int
         sem_wait(sem->count_mutex);
             (*sh_vars->elves)++;
             print_msg(fr, MUTEX, sh_vars, "Elf %d: need help\n", my_id);
+            need_help = true;
             if (*sh_vars->elves == 3)
             {
                 sem_post(sem->santa);
@@ -186,15 +195,23 @@ void elf_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, int my_id, int
         sem_post(sem->count_mutex);
 
         print_msg(fr, MUTEX, sh_vars, "Elf %d: get help\n", my_id);
+        need_help = false;
     
         sem_wait(sem->count_mutex);
             (*sh_vars->elves)--;
             if (*sh_vars->elves == 0)
             {
+                sem_post(sem->santa_test);
                 sem_post(sem->elf_mutex);
             }
         sem_post(sem->count_mutex);
 
+    }
+    sem_post(sem->count_mutex);
+
+    if (need_help == false)
+    {
+        print_msg(fr, MUTEX, sh_vars, "Elf %d: need help\n", my_id);
     }
     
     print_msg(fr, MUTEX, sh_vars, "Elf %d: taking holidays\n", my_id);
@@ -242,15 +259,15 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /*
+    
     FILE *fr = fopen("proj2.out","w");
     if (fr == NULL) 
     {
         fprintf(stderr, "Subor sa nepodarilo otvorit\n");
         return 1;
-    }*/
-
-    FILE *fr = stdout;
+    }
+    
+    //FILE *fr = stdout;
 
     //initialize semaphores
     //TODO fix failed creating

@@ -33,6 +33,8 @@
 //random number seed
 #include <time.h>
 
+#include <stdbool.h>
+
 //parsing arguments
 #include "parse_args.h"
 
@@ -51,6 +53,7 @@ typedef struct semaphores
     sem_t *elf_barrier;
     sem_t *reindeer_mutex;
     sem_t *all_hitched;
+    sem_t *santa_test;
 } semaphores_t;
 
 typedef struct shared
