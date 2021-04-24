@@ -44,8 +44,9 @@
 
 typedef struct semaphores
 {
-    sem_t *mutex;
-    sem_t *santa_sem;
+    sem_t *p_num_mutex;
+    sem_t *count_mutex;
+    sem_t *santa;
 } semaphores_t;
 
 typedef struct shared
@@ -108,5 +109,19 @@ void delete_shared();
  * @return Random number within the interval
  */
 int random_number(int min, int max);
+
+/**
+ * @brief Write message to a file (used by processes)
+ *
+ * @param fr Pointer to an opened file
+ * @param mutex Mutex semaphore to shared counter of current number of process
+ * @param sh_vars Pointer to shared variables structure
+ * @param msg Last known parameter, format of the message to print out
+ *
+ * @details This function is variadic. Predefined format of this message is
+ * "numOfProcess : *msg", so you don't need to include the first number 
+ * in your msg string
+ */
+void print_msg(FILE *fr, sem_t *mutex, shared_t *sh_vars, const char *msg, ...);
 
 #endif

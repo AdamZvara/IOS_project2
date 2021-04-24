@@ -12,15 +12,22 @@
 int init_semaphores(semaphores_t *sem)
 {
     //TODO spravit ak sa nepodari alokovat semafor
-    sem->mutex = sem_open("/mutex", O_CREAT, 0644, 1);
-    //sem->santa_sem = sem_open("/santa_sem", O_CREAT, 0644, 0);
+    
+    sem->p_num_mutex = sem_open("/p_num_mutex", O_CREAT, 0644, 1);
+    sem->count_mutex = sem_open("/count_mutex", O_CREAT, 0644, 1);
+    sem->santa = sem_open("/santa", O_CREAT, 0644, 0);
     return 0;
 }
 
 void delete_semaphores(semaphores_t *sem)
 {
-    sem_close(sem->mutex);
-    sem_unlink("/mutex");
+    sem_close(sem->p_num_mutex);
+    sem_close(sem->santa);
+    sem_close(sem->count_mutex);
+
+    sem_unlink("/p_num_mutex");
+    sem_unlink("/santa");
+    sem_unlink("/count_mutex");
 }
 
 //-------------- SHARED VARIABLE FUNCTIONS ------------------
@@ -60,42 +67,42 @@ int random_number(int min, int max)
 }
 
 //--------------- PROCESS FUNCTIONS -------------------
-void santa_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars)
+void print_msg(FILE *fr, sem_t *mutex, shared_t *sh_vars, const char *msg, ...)
 {
-    //TODO rewrite this critical section into variadic function 
-    sem_wait(sem->mutex);
+    va_list args;
+    va_start(args, msg);
+
+    sem_wait(mutex);
         u_int *count = sh_vars->pcount;
         (*count)++;
-        fprintf(fr, "%d: Santa going to sleep\n", *count);
+        fprintf(fr, "%d: ", *count);
+        vfprintf(fr, msg, args);
         fflush(fr);
-    sem_post(sem->mutex);
+    sem_post(mutex);
+
+    va_end(args);
+
+}
+
+void santa_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars)
+{
+    print_msg(fr, sem->p_num_mutex, sh_vars, "Santa: going to sleep\n");
 }
 
 void elf_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, int my_id, int max_time)
 {
+    print_msg(fr, sem->p_num_mutex, sh_vars, "Elf %d: started\n", my_id);
+    
     //simulate work
     usleep(random_number(0,max_time)*1000);
-
-    sem_wait(sem->mutex);
-        u_int *count = sh_vars->pcount;
-        (*count)++;
-        fprintf(fr, "%d: Elf %d: started\n", *count, my_id);
-        fflush(fr);
-    sem_post(sem->mutex);
 }
 
 void reindeer_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, int my_id, int max_time)
 {
-
+    print_msg(fr, sem->p_num_mutex, sh_vars, "RD %d: rstarted\n", my_id);
+    
     //simulate vacation
     usleep(random_number(max_time/2,max_time)*1000);
-    
-    sem_wait(sem->mutex);
-        u_int *count = sh_vars->pcount;
-        (*count)++;
-        fprintf(fr, "%d: RD %d: \n", *count, my_id);
-        fflush(fr);
-    sem_post(sem->mutex);
 }
 
 //---------------- MAIN FUNCTION ----------------------
