@@ -48,6 +48,9 @@ typedef struct semaphores
     sem_t *count_mutex;
     sem_t *santa;
     sem_t *elf_mutex;
+    sem_t *elf_barrier;
+    sem_t *reindeer_mutex;
+    sem_t *all_hitched;
 } semaphores_t;
 
 typedef struct shared
@@ -55,6 +58,7 @@ typedef struct shared
     u_int *pcount;
     u_int *elves;
     u_int *reindeers;
+    u_int *workshop_closed;
 } shared_t;
 
 /**
