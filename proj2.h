@@ -20,10 +20,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>  
 
-//standard libs
-#include <stdio.h>
-#include <stdlib.h>
-
 //semaphores management
 #include <semaphore.h>
 
@@ -33,6 +29,9 @@
 //random number seed
 #include <time.h>
 
+//standard libs
+#include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 
 //parsing arguments
@@ -46,26 +45,22 @@
 
 typedef struct shared
 {
-    int proc_count;
-    int elves;
-    int reindeers;
-    int workshop_closed;
+    int proc_count;         ///<Counter of all actions that happened
+    int elves;              ///<Number of elves waiting for santas help
+    int reindeers;          ///<Number of RD that came back
+    bool workshop_closed;   ///<Indicator if workshop is closed
 } shared_t;
 
 /**
  * @brief Initializes all the semaphores in sem. structure
- * 
- * @param Pointer to semaphores_t structure
  *
  * @return 0 on success
- * @return 1 ff any error occured
+ * @return 1 if any error occured
 */
 int init_semaphores();
 
 /**
  * @brief Deletes all the semaphores
- *
- * @param Pointer to semaphores_t structure
  */
 void delete_semaphores();
 

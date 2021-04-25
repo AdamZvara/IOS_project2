@@ -9,36 +9,45 @@
 
 
 //--------------- GLOBAL VARIABLES -------------------
-sem_t *print_mutex, *count_mutex, *santa, *elf_mutex, *elf_barrier,\
-        *reindeer_mutex, *all_hitched, *santa_test;
+sem_t *print_mutex;     ///< mutex for the global counter of all processes
+sem_t *counters_mutex;  ///< mutex for elves and reindeers counters
 
-shared_t *sh_vars;
+sem_t *santa;           ///< santas sleeping semaphore
+sem_t *all_hitched;     ///< santas semaphore to wait untill all RD are hitched
+sem_t *helped_all;      ///< santas semaphore to wait untill he hepled all elves
+
+sem_t *elf_mutex;       ///< elves's semaphore in front of workshop
+sem_t *elf_barrier;     ///< elves's waiting semaphore untill they get help
+sem_t *get_hitched;     ///< reindeers semaphore to get hitched by santa
+
+
+shared_t *sh_vars;      ///< shared variables
 
 //--------------- SEMAPHORE FUNCTIONS -------------------
 int init_semaphores()
 {
-    print_mutex = sem_open("/p_num_mutex", O_CREAT, 0644, 1);
-    count_mutex = sem_open("/count_mutex", O_CREAT, 0644, 1);
+    print_mutex = sem_open("/print_mutex", O_CREAT, 0644, 1);
+    counters_mutex = sem_open("/counters_mutex", O_CREAT, 0644, 1);
     santa = sem_open("/santa", O_CREAT, 0644, 0);
     elf_mutex = sem_open("/elf_mutex", O_CREAT, 0644, 1);
     elf_barrier = sem_open("/elf_barrier", O_CREAT, 0644, 0);
-    reindeer_mutex = sem_open("/reindeer_mutex", O_CREAT, 0644, 0);
+    get_hitched = sem_open("/get_hitched", O_CREAT, 0644, 0);
     all_hitched = sem_open("/all_hitched", O_CREAT, 0644, 0);
-    santa_test = sem_open("/santa_test", O_CREAT, 0644, 0);
+    helped_all = sem_open("/helped_all", O_CREAT, 0644, 0);
 
     return 0;
 }
 
 void delete_semaphores()
 {
-    sem_close(print_mutex);     sem_unlink("/p_num_mutex");
+    sem_close(print_mutex);     sem_unlink("/print_mutex");
     sem_close(santa);           sem_unlink("/santa");
-    sem_close(count_mutex);     sem_unlink("/count_mutex");
+    sem_close(counters_mutex);  sem_unlink("/counters_mutex");
     sem_close(elf_mutex);       sem_unlink("/elf_mutex");
     sem_close(elf_barrier);     sem_unlink("/elf_barrier");
-    sem_close(reindeer_mutex);  sem_unlink("/reindeer_mutex");
+    sem_close(get_hitched);     sem_unlink("/get_hitched");
     sem_close(all_hitched);     sem_unlink("/all_hitched");
-    sem_close(santa_test);      sem_unlink("/santa_test");
+    sem_close(helped_all);      sem_unlink("/helped_all");
 }
 
 //-------------- SHARED VARIABLE FUNCTIONS ------------------
@@ -50,6 +59,11 @@ int initialize_shared()
     ftruncate(fd, sizeof(sh_vars));
     sh_vars = mmap(NULL, sizeof(sh_vars), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
     
+    sh_vars->proc_count = 0;
+    sh_vars->elves = 0;
+    sh_vars->reindeers = 0;
+    sh_vars->workshop_closed = false;
+
     return 0;
 }
 
@@ -65,7 +79,6 @@ int random_number(int min, int max)
     return number+min;
 }
 
-//--------------- PROCESS FUNCTIONS -------------------
 void print_msg(FILE *fr, const char *msg, ...)
 {
     va_list args;
@@ -81,46 +94,50 @@ void print_msg(FILE *fr, const char *msg, ...)
     va_end(args);
 }
 
+//--------------- PROCESS FUNCTIONS -------------------
 void santa_function(FILE *fr, args_t args)
 {
     print_msg(fr, "Santa: going to sleep\n");
-    sem_wait(count_mutex);
-        (sh_vars->workshop_closed) = 0;
-    sem_post(count_mutex);
 
     while (1)
     {
-
+        //santa waits untill someone wakes him up
         sem_wait(santa);
-        sem_wait(count_mutex);
-            if (sh_vars->reindeers == args.NR)
+        sem_wait(counters_mutex);
+            if (sh_vars->reindeers == args.NR) //all RD returned home
             {
                 print_msg(fr, "Santa: closing workshop\n");
-                sem_post(elf_barrier);
-                (sh_vars->workshop_closed) = 1;
-                (sh_vars->reindeers) = 0;
+                sem_post(elf_barrier); //let all elves through the barrier
+                sh_vars->workshop_closed = true;
+                sh_vars->reindeers = 0; //this will become counter of hitched RD
+                
                 for (int i = 0; i < args.NR; i++)
                 {
-                    sem_post(reindeer_mutex);
+                    sem_post(get_hitched);
                 }
-                sem_post(count_mutex);
+                
+                sem_post(counters_mutex);
                 break;
             }
             else if (sh_vars->elves == 3)
             {
                 print_msg(fr, "Santa: helping elves\n");
-                sem_post(elf_barrier);
-                sem_post(elf_barrier);
-                sem_post(elf_barrier);
-                
-                sem_post(count_mutex);
-                
-                sem_wait(santa_test);
-                print_msg(fr, "Santa: going to sleep\n");
 
+                for (int i = 0; i < 3; i++)
+                {
+                    //let 3 elves through the barrier
+                    sem_post(elf_barrier);
+                }
+                
+                sem_post(counters_mutex);
+                
+                //wait untill all elves have received help
+                sem_wait(helped_all);
+                print_msg(fr, "Santa: going to sleep\n");
             }
     }
 
+    //at this point the workshop is closed and santa is waiting for RD to be hitched
     sem_wait(all_hitched);
     print_msg(fr, "Santa: Christmas started\n");
 
@@ -136,55 +153,56 @@ void elf_function(FILE *fr, int my_id, int max_time)
         //simulate work
         usleep(random_number(0,max_time)*1000);
         
-        sem_wait(count_mutex);
-        if (sh_vars->workshop_closed == 1)
+        sem_wait(counters_mutex);
+        if (sh_vars->workshop_closed == true) //workshop closed, go on holidays
         {
-            sem_post(count_mutex);
+            sem_post(counters_mutex);
             break;
         }
-        sem_post(count_mutex);
+        sem_post(counters_mutex);
 
         sem_wait(elf_mutex);
-        sem_wait(count_mutex);
-            (sh_vars->elves)++;
+        sem_wait(counters_mutex);
+            sh_vars->elves++;
             print_msg(fr, "Elf %d: need help\n", my_id);
             need_help = true;
-            if (sh_vars->elves == 3)
+            if (sh_vars->elves == 3) //3 elves are waiting, wake up santa
             {
                 sem_post(santa);
             }
             else
             {
-                sem_post(elf_mutex);
+                sem_post(elf_mutex); //let more elves in
             }
-        sem_post(count_mutex);
+        sem_post(counters_mutex);
 
-        sem_wait(elf_barrier);
-
+        sem_wait(elf_barrier); //wait for all elves
     
-        sem_wait(count_mutex);
-        if (sh_vars->workshop_closed == 1)
+        sem_wait(counters_mutex);
+        if (sh_vars->workshop_closed == true)
         {
-            sem_post(count_mutex);
+            //let all elves continue and go on holiday
+            sem_post(counters_mutex);
             sem_post(elf_mutex);
             break;
         }
-        sem_post(count_mutex);
+        sem_post(counters_mutex);
 
         print_msg(fr, "Elf %d: get help\n", my_id);
         need_help = false;
     
-        sem_wait(count_mutex);
+        sem_wait(counters_mutex);
             (sh_vars->elves)--;
             if (sh_vars->elves == 0)
             {
-                sem_post(santa_test);
+                //notify santa and let other elves in the workshop
+                sem_post(helped_all);
                 sem_post(elf_mutex);
             }
-        sem_post(count_mutex);
+        sem_post(counters_mutex);
 
     }
-    sem_post(count_mutex);
+    sem_post(counters_mutex);
 
     if (need_help == false)
     {
@@ -202,25 +220,29 @@ void reindeer_function(FILE *fr, int my_id, args_t args)
     //simulate vacation
     usleep(random_number(args.TR/2,args.TR)*1000);
     
-    sem_wait(count_mutex);
-        (sh_vars->reindeers)++;
+    sem_wait(counters_mutex);
+        sh_vars->reindeers++;
         print_msg(fr, "RD %d: return home\n", my_id);
         if ((sh_vars->reindeers) == args.NR)
         {
+            //wake santa because all RD returned home
             sem_post(santa);
         }
-    sem_post(count_mutex);
 
-    sem_wait(reindeer_mutex);
+    sem_post(counters_mutex);
+
+    //wait for santa to hitch us
+    sem_wait(get_hitched);
 
     print_msg(fr, "RD %d: get hitched\n", my_id);    
-    sem_wait(count_mutex);
-        (sh_vars->reindeers)++;
+    sem_wait(counters_mutex);
+        sh_vars->reindeers++;
         if (sh_vars->reindeers == args.NR)
         {
+            //all RD are hitched - notify santa
             sem_post(all_hitched);   
         }
-    sem_post(count_mutex);
+    sem_post(counters_mutex);
 }
 
 //---------------- MAIN FUNCTION ----------------------
