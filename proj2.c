@@ -9,15 +9,15 @@
 
 
 //--------------- GLOBAL VARIABLES -------------------
-sem_t* p_num_mutex, *count_mutex, *santa, *elf_mutex, *elf_barrier,\
+sem_t *print_mutex, *count_mutex, *santa, *elf_mutex, *elf_barrier,\
         *reindeer_mutex, *all_hitched, *santa_test;
 
-shared_t sh_vars;
+shared_t *sh_vars;
 
 //--------------- SEMAPHORE FUNCTIONS -------------------
 int init_semaphores()
 {
-    p_num_mutex = sem_open("/p_num_mutex", O_CREAT, 0644, 1);
+    print_mutex = sem_open("/p_num_mutex", O_CREAT, 0644, 1);
     count_mutex = sem_open("/count_mutex", O_CREAT, 0644, 1);
     santa = sem_open("/santa", O_CREAT, 0644, 0);
     elf_mutex = sem_open("/elf_mutex", O_CREAT, 0644, 1);
@@ -31,53 +31,31 @@ int init_semaphores()
 
 void delete_semaphores()
 {
-    sem_close(p_num_mutex);
-    sem_close(santa);
-    sem_close(count_mutex);
-    sem_close(elf_mutex);
-    sem_close(elf_barrier);
-    sem_close(reindeer_mutex);
-    sem_close(all_hitched);
-    sem_close(santa_test);
-
-    sem_unlink("/p_num_mutex");
-    sem_unlink("/santa");
-    sem_unlink("/count_mutex");
-    sem_unlink("/elf_mutex");
-    sem_unlink("/elf_barrier");
-    sem_unlink("/reindeer_mutex");
-    sem_unlink("/all_hitched");
-    sem_unlink("/santa_test");
+    sem_close(print_mutex);     sem_unlink("/p_num_mutex");
+    sem_close(santa);           sem_unlink("/santa");
+    sem_close(count_mutex);     sem_unlink("/count_mutex");
+    sem_close(elf_mutex);       sem_unlink("/elf_mutex");
+    sem_close(elf_barrier);     sem_unlink("/elf_barrier");
+    sem_close(reindeer_mutex);  sem_unlink("/reindeer_mutex");
+    sem_close(all_hitched);     sem_unlink("/all_hitched");
+    sem_close(santa_test);      sem_unlink("/santa_test");
 }
 
 //-------------- SHARED VARIABLE FUNCTIONS ------------------
 
-int create_shared(const char *name, u_int **var)
-{
-    //TODO fix if var was not created
-    int fd = shm_open(name, O_RDWR|O_CREAT|O_TRUNC, 0644);
-    ftruncate(fd, sizeof(int));
-    *var = (u_int *)mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-
-    return 0;
-}
-
 int initialize_shared()
 {
-    create_shared("/process_count", &(sh_vars.pcount));
-    create_shared("/elves_count",&(sh_vars.elves));
-    create_shared("/reindeer_count", &(sh_vars.reindeers));
-    create_shared("/workshop_closed", &(sh_vars.workshop_closed));
-
+    //TODO fix not allocating mem
+    int fd = shm_open("/shared_vars", O_RDWR|O_CREAT|O_TRUNC, 0644);
+    ftruncate(fd, sizeof(sh_vars));
+    sh_vars = mmap(NULL, sizeof(sh_vars), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    
     return 0;
 }
 
 void delete_shared()
 {
-    shm_unlink("/process_count");
-    shm_unlink("/elves_count");
-    shm_unlink("/reindeer_count");
-    shm_unlink("/workshop_closed");
+    shm_unlink("/shared_vars");
 }
 
 //---------------- OTHER FUNCTIONS --------------------
@@ -93,13 +71,12 @@ void print_msg(FILE *fr, const char *msg, ...)
     va_list args;
     va_start(args, msg);
 
-    sem_wait(p_num_mutex);
-        u_int *count = sh_vars.pcount;
-        (*count)++;
-        fprintf(fr, "%d: ", *count);
+    sem_wait(print_mutex);
+        sh_vars->proc_count++;
+        fprintf(fr, "%d: ", sh_vars->proc_count);
         vfprintf(fr, msg, args);
         fflush(fr);
-    sem_post(p_num_mutex);
+    sem_post(print_mutex);
 
     va_end(args);
 }
@@ -108,7 +85,7 @@ void santa_function(FILE *fr, args_t args)
 {
     print_msg(fr, "Santa: going to sleep\n");
     sem_wait(count_mutex);
-        (*sh_vars.workshop_closed) = 0;
+        (sh_vars->workshop_closed) = 0;
     sem_post(count_mutex);
 
     while (1)
@@ -116,12 +93,12 @@ void santa_function(FILE *fr, args_t args)
 
         sem_wait(santa);
         sem_wait(count_mutex);
-            if (*sh_vars.reindeers == args.NR)
+            if (sh_vars->reindeers == args.NR)
             {
                 print_msg(fr, "Santa: closing workshop\n");
                 sem_post(elf_barrier);
-                (*sh_vars.workshop_closed) = 1;
-                (*sh_vars.reindeers) = 0;
+                (sh_vars->workshop_closed) = 1;
+                (sh_vars->reindeers) = 0;
                 for (int i = 0; i < args.NR; i++)
                 {
                     sem_post(reindeer_mutex);
@@ -129,7 +106,7 @@ void santa_function(FILE *fr, args_t args)
                 sem_post(count_mutex);
                 break;
             }
-            else if (*sh_vars.elves == 3)
+            else if (sh_vars->elves == 3)
             {
                 print_msg(fr, "Santa: helping elves\n");
                 sem_post(elf_barrier);
@@ -160,7 +137,7 @@ void elf_function(FILE *fr, int my_id, int max_time)
         usleep(random_number(0,max_time)*1000);
         
         sem_wait(count_mutex);
-        if (*sh_vars.workshop_closed == 1)
+        if (sh_vars->workshop_closed == 1)
         {
             sem_post(count_mutex);
             break;
@@ -169,10 +146,10 @@ void elf_function(FILE *fr, int my_id, int max_time)
 
         sem_wait(elf_mutex);
         sem_wait(count_mutex);
-            (*sh_vars.elves)++;
+            (sh_vars->elves)++;
             print_msg(fr, "Elf %d: need help\n", my_id);
             need_help = true;
-            if (*sh_vars.elves == 3)
+            if (sh_vars->elves == 3)
             {
                 sem_post(santa);
             }
@@ -186,7 +163,7 @@ void elf_function(FILE *fr, int my_id, int max_time)
 
     
         sem_wait(count_mutex);
-        if (*sh_vars.workshop_closed == 1)
+        if (sh_vars->workshop_closed == 1)
         {
             sem_post(count_mutex);
             sem_post(elf_mutex);
@@ -198,8 +175,8 @@ void elf_function(FILE *fr, int my_id, int max_time)
         need_help = false;
     
         sem_wait(count_mutex);
-            (*sh_vars.elves)--;
-            if (*sh_vars.elves == 0)
+            (sh_vars->elves)--;
+            if (sh_vars->elves == 0)
             {
                 sem_post(santa_test);
                 sem_post(elf_mutex);
@@ -226,9 +203,9 @@ void reindeer_function(FILE *fr, int my_id, args_t args)
     usleep(random_number(args.TR/2,args.TR)*1000);
     
     sem_wait(count_mutex);
-        (*sh_vars.reindeers)++;
+        (sh_vars->reindeers)++;
         print_msg(fr, "RD %d: return home\n", my_id);
-        if ((*sh_vars.reindeers) == args.NR)
+        if ((sh_vars->reindeers) == args.NR)
         {
             sem_post(santa);
         }
@@ -238,8 +215,8 @@ void reindeer_function(FILE *fr, int my_id, args_t args)
 
     print_msg(fr, "RD %d: get hitched\n", my_id);    
     sem_wait(count_mutex);
-        (*sh_vars.reindeers)++;
-        if (*sh_vars.reindeers == args.NR)
+        (sh_vars->reindeers)++;
+        if (sh_vars->reindeers == args.NR)
         {
             sem_post(all_hitched);   
         }

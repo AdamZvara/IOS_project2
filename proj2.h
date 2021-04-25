@@ -44,26 +44,12 @@
 #define MAX_ELF_T 1000
 #define MAX_REIND_T 1000
 
-/*
-typedef struct semaphores
-{
-    sem_t *p_num_mutex;
-    sem_t *count_mutex;
-    sem_t *santa;
-    sem_t *elf_mutex;
-    sem_t *elf_barrier;
-    sem_t *reindeer_mutex;
-    sem_t *all_hitched;
-    sem_t *santa_test;
-} semaphores_t;
-*/
-
 typedef struct shared
 {
-    u_int *pcount;
-    u_int *elves;
-    u_int *reindeers;
-    u_int *workshop_closed;
+    int proc_count;
+    int elves;
+    int reindeers;
+    int workshop_closed;
 } shared_t;
 
 /**
@@ -73,8 +59,8 @@ typedef struct shared
  *
  * @return 0 on success
  * @return 1 ff any error occured
-int init_semaphores(semaphores_t *sem);
 */
+int init_semaphores();
 
 /**
  * @brief Deletes all the semaphores
@@ -82,18 +68,6 @@ int init_semaphores(semaphores_t *sem);
  * @param Pointer to semaphores_t structure
  */
 void delete_semaphores();
-
-
-/**
- * @brief Create a single shared variable
- *
- * @param name Name of the shared variable
- * @param var Pointer to pointe to item in shared_t structure
- *
- * @return 0 on succcess
- * @return 1 if any error occured
- */
-int create_shared(const char *name, u_int **var);
 
 /**
  * @brief Initialize shared variables between processes
