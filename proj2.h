@@ -44,6 +44,7 @@
 #define MAX_ELF_T 1000
 #define MAX_REIND_T 1000
 
+/*
 typedef struct semaphores
 {
     sem_t *p_num_mutex;
@@ -55,6 +56,7 @@ typedef struct semaphores
     sem_t *all_hitched;
     sem_t *santa_test;
 } semaphores_t;
+*/
 
 typedef struct shared
 {
@@ -71,15 +73,15 @@ typedef struct shared
  *
  * @return 0 on success
  * @return 1 ff any error occured
- */
 int init_semaphores(semaphores_t *sem);
+*/
 
 /**
  * @brief Deletes all the semaphores
  *
  * @param Pointer to semaphores_t structure
  */
-void delete_semaphores(semaphores_t *sem);
+void delete_semaphores();
 
 
 /**
@@ -130,6 +132,6 @@ int random_number(int min, int max);
  * "numOfProcess : *msg", so you don't need to include the first number 
  * in your msg string
  */
-void print_msg(FILE *fr, sem_t *mutex, shared_t *sh_vars, const char *msg, ...);
+void print_msg(FILE *fr, shared_t *sh_vars, const char *msg, ...);
 
 #endif

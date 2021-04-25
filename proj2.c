@@ -7,36 +7,35 @@
 
 #include "proj2.h"
 
-#define MUTEX sem->p_num_mutex
 
-//---------------SEMAPHORE FUNCTIONS-------------------
+//--------------- SEMAPHORES AND  FUNCTIONS -------------------
+sem_t* p_num_mutex, *count_mutex, *santa, *elf_mutex, *elf_barrier,\
+        *reindeer_mutex, *all_hitched, *santa_test;
 
-int init_semaphores(semaphores_t *sem)
+int init_semaphores()
 {
-    //TODO spravit ak sa nepodari alokovat semafor
-    
-    sem->p_num_mutex = sem_open("/p_num_mutex", O_CREAT, 0644, 1);
-    sem->count_mutex = sem_open("/count_mutex", O_CREAT, 0644, 1);
-    sem->santa = sem_open("/santa", O_CREAT, 0644, 0);
-    sem->elf_mutex = sem_open("/elf_mutex", O_CREAT, 0644, 1);
-    sem->elf_barrier = sem_open("/elf_barrier", O_CREAT, 0644, 0);
-    sem->reindeer_mutex = sem_open("/reindeer_mutex", O_CREAT, 0644, 0);
-    sem->all_hitched = sem_open("/all_hitched", O_CREAT, 0644, 0);
-    sem->santa_test = sem_open("/santa_test", O_CREAT, 0644, 0);
-    
+    p_num_mutex = sem_open("/p_num_mutex", O_CREAT, 0644, 1);
+    count_mutex = sem_open("/count_mutex", O_CREAT, 0644, 1);
+    santa = sem_open("/santa", O_CREAT, 0644, 0);
+    elf_mutex = sem_open("/elf_mutex", O_CREAT, 0644, 1);
+    elf_barrier = sem_open("/elf_barrier", O_CREAT, 0644, 0);
+    reindeer_mutex = sem_open("/reindeer_mutex", O_CREAT, 0644, 0);
+    all_hitched = sem_open("/all_hitched", O_CREAT, 0644, 0);
+    santa_test = sem_open("/santa_test", O_CREAT, 0644, 0);
+
     return 0;
 }
 
-void delete_semaphores(semaphores_t *sem)
+void delete_semaphores()
 {
-    sem_close(sem->p_num_mutex);
-    sem_close(sem->santa);
-    sem_close(sem->count_mutex);
-    sem_close(sem->elf_mutex);
-    sem_close(sem->elf_barrier);
-    sem_close(sem->reindeer_mutex);
-    sem_close(sem->all_hitched);
-    sem_close(sem->santa_test);
+    sem_close(p_num_mutex);
+    sem_close(santa);
+    sem_close(count_mutex);
+    sem_close(elf_mutex);
+    sem_close(elf_barrier);
+    sem_close(reindeer_mutex);
+    sem_close(all_hitched);
+    sem_close(santa_test);
 
     sem_unlink("/p_num_mutex");
     sem_unlink("/santa");
@@ -79,7 +78,6 @@ void delete_shared()
 }
 
 //---------------- OTHER FUNCTIONS --------------------
-
 int random_number(int min, int max)
 {
     int number = rand() % (max-min+1);
@@ -87,71 +85,71 @@ int random_number(int min, int max)
 }
 
 //--------------- PROCESS FUNCTIONS -------------------
-void print_msg(FILE *fr, sem_t *mutex, shared_t *sh_vars, const char *msg, ...)
+void print_msg(FILE *fr, shared_t *sh_vars, const char *msg, ...)
 {
     va_list args;
     va_start(args, msg);
 
-    sem_wait(mutex);
+    sem_wait(p_num_mutex);
         u_int *count = sh_vars->pcount;
         (*count)++;
         fprintf(fr, "%d: ", *count);
         vfprintf(fr, msg, args);
         fflush(fr);
-    sem_post(mutex);
+    sem_post(p_num_mutex);
 
     va_end(args);
 
 }
 
-void santa_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, args_t args)
+void santa_function(FILE *fr, shared_t *sh_vars, args_t args)
 {
-    print_msg(fr, MUTEX, sh_vars, "Santa: going to sleep\n");
-    sem_wait(sem->count_mutex);
+    print_msg(fr, sh_vars, "Santa: going to sleep\n");
+    sem_wait(count_mutex);
         (*sh_vars->workshop_closed) = 0;
-    sem_post(sem->count_mutex);
+    sem_post(count_mutex);
 
     while (1)
     {
 
-        sem_wait(sem->santa);
-        sem_wait(sem->count_mutex);
+        sem_wait(santa);
+        sem_wait(count_mutex);
             if (*sh_vars->reindeers == args.NR)
             {
-                print_msg(fr, MUTEX, sh_vars, "Santa: closing workshop\n");
-                sem_post(sem->elf_barrier);
+                print_msg(fr, sh_vars, "Santa: closing workshop\n");
+                sem_post(elf_barrier);
                 (*sh_vars->workshop_closed) = 1;
                 (*sh_vars->reindeers) = 0;
                 for (int i = 0; i < args.NR; i++)
                 {
-                    sem_post(sem->reindeer_mutex);
+                    sem_post(reindeer_mutex);
                 }
-                sem_post(sem->count_mutex);
+                sem_post(count_mutex);
                 break;
             }
             else if (*sh_vars->elves == 3)
             {
-                print_msg(fr, MUTEX, sh_vars, "Santa: helping elves\n");
-                sem_post(sem->elf_barrier);
-                sem_post(sem->elf_barrier);
-                sem_post(sem->elf_barrier);
+                print_msg(fr, sh_vars, "Santa: helping elves\n");
+                sem_post(elf_barrier);
+                sem_post(elf_barrier);
+                sem_post(elf_barrier);
                 
-                sem_post(sem->count_mutex);
+                sem_post(count_mutex);
                 
-                sem_wait(sem->santa_test);
-                print_msg(fr, MUTEX, sh_vars, "Santa: going to sleep\n");
+                sem_wait(santa_test);
+                print_msg(fr, sh_vars, "Santa: going to sleep\n");
 
             }
     }
 
-    sem_wait(sem->all_hitched);
-    print_msg(fr, MUTEX, sh_vars, "Santa: Christmas started\n");
+    sem_wait(all_hitched);
+    print_msg(fr, sh_vars, "Santa: Christmas started\n");
 
 }
 
-void elf_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, int my_id, int max_time)
+void elf_function(FILE *fr, shared_t *sh_vars, int my_id, int max_time)
 {
-    print_msg(fr, MUTEX, sh_vars, "Elf %d: started\n", my_id);
+    print_msg(fr, sh_vars, "Elf %d: started\n", my_id);
     bool need_help = false;
 
     while (1)
@@ -159,91 +157,91 @@ void elf_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, int my_id, int
         //simulate work
         usleep(random_number(0,max_time)*1000);
         
-        sem_wait(sem->count_mutex);
+        sem_wait(count_mutex);
         if (*sh_vars->workshop_closed == 1)
         {
-            sem_post(sem->count_mutex);
+            sem_post(count_mutex);
             break;
         }
-        sem_post(sem->count_mutex);
+        sem_post(count_mutex);
 
-        sem_wait(sem->elf_mutex);
-        sem_wait(sem->count_mutex);
+        sem_wait(elf_mutex);
+        sem_wait(count_mutex);
             (*sh_vars->elves)++;
-            print_msg(fr, MUTEX, sh_vars, "Elf %d: need help\n", my_id);
+            print_msg(fr, sh_vars, "Elf %d: need help\n", my_id);
             need_help = true;
             if (*sh_vars->elves == 3)
             {
-                sem_post(sem->santa);
+                sem_post(santa);
             }
             else
             {
-                sem_post(sem->elf_mutex);
+                sem_post(elf_mutex);
             }
-        sem_post(sem->count_mutex);
+        sem_post(count_mutex);
 
-        sem_wait(sem->elf_barrier);
+        sem_wait(elf_barrier);
 
     
-        sem_wait(sem->count_mutex);
+        sem_wait(count_mutex);
         if (*sh_vars->workshop_closed == 1)
         {
-            sem_post(sem->count_mutex);
-            sem_post(sem->elf_mutex);
+            sem_post(count_mutex);
+            sem_post(elf_mutex);
             break;
         }
-        sem_post(sem->count_mutex);
+        sem_post(count_mutex);
 
-        print_msg(fr, MUTEX, sh_vars, "Elf %d: get help\n", my_id);
+        print_msg(fr, sh_vars, "Elf %d: get help\n", my_id);
         need_help = false;
     
-        sem_wait(sem->count_mutex);
+        sem_wait(count_mutex);
             (*sh_vars->elves)--;
             if (*sh_vars->elves == 0)
             {
-                sem_post(sem->santa_test);
-                sem_post(sem->elf_mutex);
+                sem_post(santa_test);
+                sem_post(elf_mutex);
             }
-        sem_post(sem->count_mutex);
+        sem_post(count_mutex);
 
     }
-    sem_post(sem->count_mutex);
+    sem_post(count_mutex);
 
     if (need_help == false)
     {
-        print_msg(fr, MUTEX, sh_vars, "Elf %d: need help\n", my_id);
+        print_msg(fr, sh_vars, "Elf %d: need help\n", my_id);
     }
     
-    print_msg(fr, MUTEX, sh_vars, "Elf %d: taking holidays\n", my_id);
-    sem_post(sem->elf_barrier);
+    print_msg(fr, sh_vars, "Elf %d: taking holidays\n", my_id);
+    sem_post(elf_barrier);
 }
 
-void reindeer_function(FILE *fr, semaphores_t *sem, shared_t *sh_vars, int my_id, args_t args)
+void reindeer_function(FILE *fr, shared_t *sh_vars, int my_id, args_t args)
 {
-    print_msg(fr, sem->p_num_mutex, sh_vars, "RD %d: rstarted\n", my_id);
+    print_msg(fr, sh_vars, "RD %d: rstarted\n", my_id);
     
     //simulate vacation
     usleep(random_number(args.TR/2,args.TR)*1000);
     
-    sem_wait(sem->count_mutex);
+    sem_wait(count_mutex);
         (*sh_vars->reindeers)++;
-        print_msg(fr, sem->p_num_mutex, sh_vars, "RD %d: return home\n", my_id);
+        print_msg(fr, sh_vars, "RD %d: return home\n", my_id);
         if ((*sh_vars->reindeers) == args.NR)
         {
-            sem_post(sem->santa);
+            sem_post(santa);
         }
-    sem_post(sem->count_mutex);
+    sem_post(count_mutex);
 
-    sem_wait(sem->reindeer_mutex);
+    sem_wait(reindeer_mutex);
 
-    print_msg(fr, sem->p_num_mutex, sh_vars, "RD %d: get hitched\n", my_id);    
-    sem_wait(sem->count_mutex);
+    print_msg(fr, sh_vars, "RD %d: get hitched\n", my_id);    
+    sem_wait(count_mutex);
         (*sh_vars->reindeers)++;
         if (*sh_vars->reindeers == args.NR)
         {
-            sem_post(sem->all_hitched);   
+            sem_post(all_hitched);   
         }
-    sem_post(sem->count_mutex);
+    sem_post(count_mutex);
 }
 
 //---------------- MAIN FUNCTION ----------------------
@@ -271,13 +269,12 @@ int main(int argc, char *argv[])
 
     //initialize semaphores
     //TODO fix failed creating
-    semaphores_t sem;
-    if (init_semaphores(&sem)) return 1;
+    init_semaphores();
     
     shared_t sh_vars;
     if (initialize_shared(&sh_vars))
     {
-        delete_semaphores(&sem);
+        delete_semaphores();
         fclose(fr);
         return 1;
     }
@@ -288,7 +285,7 @@ int main(int argc, char *argv[])
 
     if (pid == 0) //santa process
     {
-        santa_function(fr , &sem, &sh_vars, args);
+        santa_function(fr , &sh_vars, args);
         exit(1);
     }
     else if (pid == -1)
@@ -308,7 +305,7 @@ int main(int argc, char *argv[])
             //generate new random seed for each process
             srand((int)time(0) % getpid());
 
-            elf_function(fr, &sem, &sh_vars, elf_id, args.TE);
+            elf_function(fr, &sh_vars, elf_id, args.TE);
             exit(1);
         }
         else if (pid == -1)
@@ -326,7 +323,7 @@ int main(int argc, char *argv[])
         {
             srand((int)time(0) % getpid());
             
-            reindeer_function(fr, &sem, &sh_vars, rd_id, args);
+            reindeer_function(fr, &sh_vars, rd_id, args);
             exit(1);
         }
         else if (pid == -1)
@@ -337,7 +334,7 @@ int main(int argc, char *argv[])
 
     while ((wpid = wait(&status)) > 0);
 
-    delete_semaphores(&sem);
+    delete_semaphores();
     delete_shared();
     
     fclose(fr);
