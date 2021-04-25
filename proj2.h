@@ -98,12 +98,10 @@ int create_shared(const char *name, u_int **var);
 /**
  * @brief Initialize shared variables between processes
  *
- * @param sh_vars Pointer to shared variable structure
- *
  * @return 0 on succcess
  * @return 1 if any error occured
  */
-int initialize_shared(shared_t *sh_vars);
+int initialize_shared();
 
 /**
  * @brief Function to clear shared variables
@@ -124,14 +122,12 @@ int random_number(int min, int max);
  * @brief Write message to a file (used by processes)
  *
  * @param fr Pointer to an opened file
- * @param mutex Mutex semaphore to shared counter of current number of process
- * @param sh_vars Pointer to shared variables structure
  * @param msg Last known parameter, format of the message to print out
  *
  * @details This function is variadic. Predefined format of this message is
  * "numOfProcess : *msg", so you don't need to include the first number 
  * in your msg string
  */
-void print_msg(FILE *fr, shared_t *sh_vars, const char *msg, ...);
+void print_msg(FILE *fr, const char *msg, ...);
 
 #endif
